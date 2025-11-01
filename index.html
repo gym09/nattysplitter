@@ -280,6 +280,36 @@
         .quick-question:hover {
             background: #4B5563;
         }
+        /* Weight selector styles */
+        .weight-selector {
+            display: none;
+            margin-top: 10px;
+            padding: 10px;
+            background: #1F2937;
+            border-radius: 8px;
+            border: 1px solid #374151;
+        }
+        .weight-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .weight-option {
+            background: #374151;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .weight-option:hover {
+            background: #4B5563;
+        }
+        .weight-option.selected {
+            background: #DC2626;
+        }
     </style>
 </head>
 <body class="bg-dark-primary text-gray-200 font-sans min-h-screen flex flex-col">
@@ -427,6 +457,14 @@
                                 Choose your desired focus and available equipment, then click 'Generate Quick Rep' for a simple workout, or the 'AI Trainer's Plan' for a custom, detailed routine!
                             </p>
                             
+                            <!-- Weight Selector (New Feature) -->
+                            <div id="weight-selector" class="weight-selector">
+                                <p class="text-sm font-semibold text-accent-light mb-2">Select Weight (kg):</p>
+                                <div class="weight-options" id="weight-options">
+                                    <!-- Weight options will be populated by JavaScript -->
+                                </div>
+                            </div>
+                            
                             <!-- Timer Controls and Selector -->
                             <div class="space-y-3 mt-4">
                                 <!-- Duration Selector -->
@@ -551,6 +589,28 @@
                                 <div id="ideal-weight" class="mt-4 hidden">
                                     <p class="text-lg font-semibold text-accent-blue">Ideal Weight Range</p>
                                     <p id="ideal-weight-range" class="text-sm mt-1"></p>
+                                </div>
+                                
+                                <!-- Height Analysis (New Feature) -->
+                                <div id="height-analysis" class="mt-4 hidden">
+                                    <p class="text-lg font-semibold text-accent-blue">Height Analysis</p>
+                                    <p id="height-feedback" class="text-sm mt-1"></p>
+                                    <div id="height-exercises" class="mt-2 hidden">
+                                        <p class="text-xs font-semibold text-gray-400 mb-1">Height-Boosting Exercises:</p>
+                                        <ul class="text-xs text-gray-300 text-left list-disc pl-4">
+                                            <li>Hanging from a pull-up bar (30-60 seconds daily)</li>
+                                            <li>Cobra stretch (hold for 30 seconds, repeat 3-5 times)</li>
+                                            <li>Pelvic shifts (10-15 reps daily)</li>
+                                            <li>Swimming (30 minutes, 3-4 times a week)</li>
+                                            <li>Jumping exercises like skipping rope or basketball</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                
+                                <!-- Activity Level Recommendation (New Feature) -->
+                                <div id="activity-recommendation" class="mt-4 hidden">
+                                    <p class="text-lg font-semibold text-accent-blue">Activity Recommendation</p>
+                                    <p id="activity-feedback" class="text-sm mt-1"></p>
                                 </div>
                                 
                                 <div id="recommendation" class="mt-4 hidden">
@@ -706,6 +766,7 @@
         let currentCountdownDays = 100;
         let userGoal = 'maintain'; // Default goal
         let chatOpen = false;
+        let selectedWeight = null; // Track selected weight for exercises
 
         // AI Chat Bot Elements
         const chatBox = document.getElementById('chat-box');
@@ -726,6 +787,8 @@
         const quickBtn = document.getElementById('generate-wod-btn');
         const messageEl = document.getElementById('api-message');
         const countdownDurationEl = document.getElementById('countdown-duration');
+        const weightSelector = document.getElementById('weight-selector');
+        const weightOptions = document.getElementById('weight-options');
 
         // Nutrition elements
         const calculateCaloriesBtn = document.getElementById('calculate-calories-btn');
@@ -737,6 +800,11 @@
         const bmiMarker = document.getElementById('bmi-marker');
         const idealWeight = document.getElementById('ideal-weight');
         const idealWeightRange = document.getElementById('ideal-weight-range');
+        const heightAnalysis = document.getElementById('height-analysis');
+        const heightFeedback = document.getElementById('height-feedback');
+        const heightExercises = document.getElementById('height-exercises');
+        const activityRecommendation = document.getElementById('activity-recommendation');
+        const activityFeedback = document.getElementById('activity-feedback');
         const recommendation = document.getElementById('recommendation');
         const recommendationText = document.getElementById('recommendation-text');
         const calorieResult = document.getElementById('calorie-result');
@@ -1135,10 +1203,55 @@
              `;
         }
 
+        // --- Weight Selection Logic (NEW) ---
+        const showWeightSelector = (equipment) => {
+            // Clear previous options
+            weightOptions.innerHTML = '';
+            selectedWeight = null;
+            
+            // Only show for dumbbell and barbell exercises
+            if (equipment === 'Dumbbells' || equipment === 'Barbell') {
+                // Create weight options based on equipment
+                let weights = [];
+                if (equipment === 'Dumbbells') {
+                    weights = [2, 4, 6, 8, 10, 12, 15, 20, 25, 30, 35, 40];
+                } else if (equipment === 'Barbell') {
+                    weights = [20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 140, 160, 180, 200];
+                }
+                
+                // Create weight buttons
+                weights.forEach(weight => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'weight-option';
+                    button.textContent = `${weight}kg`;
+                    button.addEventListener('click', () => {
+                        // Remove selected class from all buttons
+                        document.querySelectorAll('.weight-option').forEach(btn => {
+                            btn.classList.remove('selected');
+                        });
+                        // Add selected class to clicked button
+                        button.classList.add('selected');
+                        selectedWeight = weight;
+                    });
+                    weightOptions.appendChild(button);
+                });
+                
+                // Show the weight selector
+                weightSelector.style.display = 'block';
+            } else {
+                // Hide the weight selector for other equipment
+                weightSelector.style.display = 'none';
+            }
+        }
+
         const updateWODDisplay = (workoutName, equipment, details) => {
             equipmentEl.textContent = `EQUIPMENT: ${equipment.toUpperCase()}`;
             nameEl.textContent = workoutName;
             detailsEl.textContent = details;
+            
+            // Show weight selector if applicable
+            showWeightSelector(equipment);
             
             // Store details for the quote box
             currentWorkoutDetails = details;
@@ -1197,7 +1310,7 @@
         
         // Function to save workout history to the PUBLIC log
         const saveWorkoutToHistory = async () => {
-            const userId = 'demo-user';
+            const userId = currentUserName || 'Anonymous Athlete';
             const userName = currentUserName || 'Anonymous Athlete';
 
             try {
@@ -1215,8 +1328,11 @@
                 const userDisplay = userName && userName !== 'Anonymous Athlete' 
                     ? userName : userId;
 
+                // Add weight info if available
+                const weightInfo = selectedWeight ? ` | ${selectedWeight}kg` : '';
+                
                 listItem.innerHTML = `
-                    <span class="font-semibold text-accent-light break-words">${nameEl.textContent}</span>
+                    <span class="font-semibold text-accent-light break-words">${nameEl.textContent}${weightInfo}</span>
                     <span class="text-center font-mono text-gray-300">${durationFormatted}</span>
                     <span class="text-center text-xs text-gray-400 font-mono break-all">${userDisplay}</span>
                     <span class="text-xs text-gray-500 text-center">${dateString}</span>
@@ -1406,6 +1522,67 @@
             
             // Update ideal weight
             idealWeightRange.textContent = `${Math.round(minIdealWeight)}kg - ${Math.round(maxIdealWeight)}kg`;
+            
+            // --- NEW: Height Analysis ---
+            let heightMessage = '';
+            let showHeightExercises = false;
+            
+            // Determine if height is appropriate for age and weight
+            if (gender === 'male') {
+                if (age < 25 && height < 170) {
+                    heightMessage = `According to your age (${age}) and weight (${weight}kg), your height (${height}cm) is below average. Consider exercises that can help improve posture and potentially maximize your height.`;
+                    showHeightExercises = true;
+                } else if (age >= 25 && height < 170) {
+                    heightMessage = `Your height (${height}cm) is below average for your age (${age}). While height is largely determined by genetics, good posture can make you appear taller.`;
+                    showHeightExercises = true;
+                } else {
+                    heightMessage = `Your height (${height}cm) is appropriate for your age (${age}) and weight (${weight}kg). Maintain good posture to maximize your appearance.`;
+                }
+            } else { // female
+                if (age < 25 && height < 160) {
+                    heightMessage = `According to your age (${age}) and weight (${weight}kg), your height (${height}cm) is below average. Consider exercises that can help improve posture and potentially maximize your height.`;
+                    showHeightExercises = true;
+                } else if (age >= 25 && height < 160) {
+                    heightMessage = `Your height (${height}cm) is below average for your age (${age}). While height is largely determined by genetics, good posture can make you appear taller.`;
+                    showHeightExercises = true;
+                } else {
+                    heightMessage = `Your height (${height}cm) is appropriate for your age (${age}) and weight (${weight}kg). Maintain good posture to maximize your appearance.`;
+                }
+            }
+            
+            heightFeedback.textContent = heightMessage;
+            heightAnalysis.classList.remove('hidden');
+            
+            if (showHeightExercises) {
+                heightExercises.classList.remove('hidden');
+            } else {
+                heightExercises.classList.add('hidden');
+            }
+            
+            // --- NEW: Activity Level Recommendation ---
+            let activityMessage = '';
+            if (age < 30) {
+                if (activityLevel < 1.55) {
+                    activityMessage = `At your age (${age}), we recommend being moderately active (exercise 3-5 days/week) for optimal health and fitness.`;
+                } else {
+                    activityMessage = `Great! Your current activity level is appropriate for your age (${age}).`;
+                }
+            } else if (age < 50) {
+                if (activityLevel < 1.375) {
+                    activityMessage = `At your age (${age}), we recommend being at least lightly active (exercise 1-3 days/week) for maintaining health and mobility.`;
+                } else {
+                    activityMessage = `Great! Your current activity level is appropriate for your age (${age}).`;
+                }
+            } else {
+                if (activityLevel < 1.2) {
+                    activityMessage = `At your age (${age}), we recommend incorporating some light activity into your routine to maintain mobility and overall health.`;
+                } else {
+                    activityMessage = `Great! Your current activity level is appropriate for your age (${age}).`;
+                }
+            }
+            
+            activityFeedback.textContent = activityMessage;
+            activityRecommendation.classList.remove('hidden');
             
             // Update recommendation
             recommendationText.textContent = recommendationMessage;
