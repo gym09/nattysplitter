@@ -8,6 +8,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Load Phosphor Icons for social media/UI icons -->
     <script src="https://unpkg.com/phosphor-icons"></script>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
     <!-- Configure Tailwind and Inter font -->
     <script>
         tailwind.config = {
@@ -128,10 +131,10 @@
             z-index: 60; /* Higher than auth modal */
             padding: 1rem;
         }
-        /* Updated grid for history log to include User ID/Name */
+        /* Updated grid for history log to include User ID/Name, Body Part, and Equipment */
         .history-item {
             display: grid;
-            grid-template-columns: 1fr 100px 150px 100px; /* Name | Duration | User ID | Date */
+            grid-template-columns: 2fr 100px 100px 100px 150px 100px; /* Name | Body Part | Equipment | Duration | User | Date */
             gap: 1rem;
             padding: 1rem 0;
             border-bottom: 1px solid #374151;
@@ -309,6 +312,36 @@
         }
         .weight-option.selected {
             background: #DC2626;
+        }
+        /* Social login buttons */
+        .social-login-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            width: 100%;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+        }
+        .social-login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        .google-btn {
+            background: white;
+            color: #333;
+        }
+        .facebook-btn {
+            background: #1877F2;
+            color: white;
+        }
+        .github-btn {
+            background: #333;
+            color: white;
         }
     </style>
 </head>
@@ -694,22 +727,38 @@
             <h2 class="text-4xl font-extrabold text-accent-red mb-3 text-center">ACCESS TERMINAL</h2>
             <p class="text-center text-gray-400 mb-8">Sign in or create your Syntactic Strength profile.</p>
 
+            <!-- Social Login Buttons -->
+            <div class="space-y-4 mb-6">
+                <button id="google-login-btn" class="social-login-btn google-btn">
+                    <i class="ph ph-google-logo"></i>
+                    Continue with Google
+                </button>
+                <button id="facebook-login-btn" class="social-login-btn facebook-btn">
+                    <i class="ph ph-facebook-logo"></i>
+                    Continue with Facebook
+                </button>
+                <button id="github-login-btn" class="social-login-btn github-btn">
+                    <i class="ph ph-github-logo"></i>
+                    Continue with GitHub
+                </button>
+            </div>
+
             <!-- Separator -->
             <div class="flex items-center my-6">
                 <div class="flex-grow border-t border-gray-700"></div>
-                <span class="flex-shrink mx-4 text-gray-500 text-sm">ENTER YOUR CREDENTIALS</span>
+                <span class="flex-shrink mx-4 text-gray-500 text-sm">OR USE EMAIL</span>
                 <div class="flex-grow border-t border-gray-700"></div>
             </div>
 
-            <!-- Full Name/Password Form -->
+            <!-- Email/Password Form -->
             <form id="login-form" class="space-y-4">
                 <div>
-                    <label for="full-name" class="block text-sm font-medium text-gray-400 mb-1">Full Name</label>
-                    <input type="text" id="full-name" required class="w-full p-3 rounded-lg bg-dark-primary border border-gray-600 text-white focus:ring-accent-red focus:border-accent-red transition">
+                    <label for="email" class="block text-sm font-medium text-gray-400 mb-1">Email</label>
+                    <input type="email" id="email" required class="w-full p-3 rounded-lg bg-dark-primary border border-gray-600 text-white focus:ring-accent-red focus:border-accent-red transition" placeholder="Enter your email">
                 </div>
                 <div>
                     <label for="password" class="block text-sm font-medium text-gray-400 mb-1">Password</label>
-                    <input type="password" id="password" required class="w-full p-3 rounded-lg bg-dark-primary border border-gray-600 text-white focus:ring-accent-red focus:border-accent-red transition">
+                    <input type="password" id="password" required class="w-full p-3 rounded-lg bg-dark-primary border border-gray-600 text-white focus:ring-accent-red focus:border-accent-red transition" placeholder="Enter your password">
                 </div>
                 
                 <button type="submit" class="w-full bg-accent-red text-dark-primary p-3 rounded-lg font-black uppercase hover:bg-red-400 transition shadow-lg mt-4">
@@ -738,8 +787,10 @@
             <!-- History List Header - Updated grid columns -->
             <div class="history-item font-bold text-gray-300 border-b-2 border-accent-red mb-2 pt-0">
                 <span class="uppercase text-sm">Workout Name</span>
+                <span class="uppercase text-sm text-center">Body Part</span>
+                <span class="uppercase text-sm text-center">Equipment</span>
                 <span class="uppercase text-sm text-center">Duration</span>
-                <span class="uppercase text-sm text-center">User (ID)</span>
+                <span class="uppercase text-sm text-center">User</span>
                 <span class="uppercase text-sm text-center">Completed</span>
             </div>
 
@@ -756,8 +807,23 @@
     
     <!-- JavaScript for Countdown Timer, WOD, and Modal -->
     <script>
+        // --- Firebase Configuration ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyC4RLQOq7Q6X6X6X6X6X6X6X6X6X6X6X6X6X6",
+            authDomain: "syntactic-strength.firebaseapp.com",
+            projectId: "syntactic-strength",
+            storageBucket: "syntactic-strength.appspot.com",
+            messagingSenderId: "123456789012",
+            appId: "1:123456789012:web:abcdef1234567890abcdef"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+
         // --- Global Variables & Elements ---
         let setTimerInterval = null;
+        let currentUser = null; // Firebase user object
         let currentUserName = null; // Stores the user's name for personalization
         let currentWorkoutDetails = 'Initialize Your Workout.'; // Stores the last generated workout details for the quote box
         let currentSetDuration = 60; // Default set duration in seconds
@@ -767,6 +833,8 @@
         let userGoal = 'maintain'; // Default goal
         let chatOpen = false;
         let selectedWeight = null; // Track selected weight for exercises
+        let currentWorkout = null; // Store current workout for weight selection updates
+        let lastEquipmentType = null; // Track last equipment type to preserve weight selection
 
         // AI Chat Bot Elements
         const chatBox = document.getElementById('chat-box');
@@ -824,6 +892,11 @@
         const footerAuthBtn = document.getElementById('footer-auth-btn');
         const authModalContent = document.getElementById('auth-modal-content');
 
+        // --- Social Login Buttons ---
+        const googleLoginBtn = document.getElementById('google-login-btn');
+        const facebookLoginBtn = document.getElementById('facebook-login-btn');
+        const githubLoginBtn = document.getElementById('github-login-btn');
+
         // --- History Modal Elements (NEW) ---
         const viewHistoryBtn = document.getElementById('view-history-btn');
         const historyModal = document.getElementById('history-modal');
@@ -859,6 +932,108 @@
             "The food you eat can be either the safest form of medicine or the slowest form of poison.",
             "Don't dig your grave with your own knife and fork."
         ];
+
+        // --- Authentication Functions ---
+        
+        // Initialize authentication state
+        const initAuth = () => {
+            auth.onAuthStateChanged((user) => {
+                if (user) {
+                    // User is signed in
+                    currentUser = user;
+                    currentUserName = user.displayName || user.email || 'Anonymous Athlete';
+                    console.log('User signed in:', currentUserName);
+                    updateUserUI();
+                    setMotivationQuote(nameEl.textContent, currentWorkoutDetails);
+                } else {
+                    // User is signed out
+                    currentUser = null;
+                    currentUserName = null;
+                    console.log('User signed out');
+                    updateUserUI();
+                    setMotivationQuote(nameEl.textContent, currentWorkoutDetails);
+                }
+            });
+        };
+
+        // Google Sign In
+        const signInWithGoogle = () => {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            auth.signInWithPopup(provider)
+                .then((result) => {
+                    console.log('Google sign in successful');
+                    closeAuthModal();
+                })
+                .catch((error) => {
+                    console.error('Google sign in error:', error);
+                    alert('Failed to sign in with Google: ' + error.message);
+                });
+        };
+
+        // Facebook Sign In
+        const signInWithFacebook = () => {
+            const provider = new firebase.auth.FacebookAuthProvider();
+            auth.signInWithPopup(provider)
+                .then((result) => {
+                    console.log('Facebook sign in successful');
+                    closeAuthModal();
+                })
+                .catch((error) => {
+                    console.error('Facebook sign in error:', error);
+                    alert('Failed to sign in with Facebook: ' + error.message);
+                });
+        };
+
+        // GitHub Sign In
+        const signInWithGitHub = () => {
+            const provider = new firebase.auth.GithubAuthProvider();
+            auth.signInWithPopup(provider)
+                .then((result) => {
+                    console.log('GitHub sign in successful');
+                    closeAuthModal();
+                })
+                .catch((error) => {
+                    console.error('GitHub sign in error:', error);
+                    alert('Failed to sign in with GitHub: ' + error.message);
+                });
+        };
+
+        // Email/Password Sign Up
+        const signUpWithEmail = (email, password) => {
+            auth.createUserWithEmailAndPassword(email, password)
+                .then((result) => {
+                    console.log('Email sign up successful');
+                    closeAuthModal();
+                })
+                .catch((error) => {
+                    console.error('Email sign up error:', error);
+                    alert('Failed to create account: ' + error.message);
+                });
+        };
+
+        // Email/Password Sign In
+        const signInWithEmail = (email, password) => {
+            auth.signInWithEmailAndPassword(email, password)
+                .then((result) => {
+                    console.log('Email sign in successful');
+                    closeAuthModal();
+                })
+                .catch((error) => {
+                    console.error('Email sign in error:', error);
+                    alert('Failed to sign in: ' + error.message);
+                });
+        };
+
+        // Sign Out
+        const signOut = () => {
+            auth.signOut()
+                .then(() => {
+                    console.log('User signed out successfully');
+                })
+                .catch((error) => {
+                    console.error('Sign out error:', error);
+                });
+        };
 
         // --- AI Chat Bot Functions ---
         function toggleChat() {
@@ -1109,10 +1284,7 @@
 
         // Updates the header/footer buttons based on the login state
         const updateUserUI = () => {
-            const userId = 'N/A';
-            userIdDisplay.textContent = `Your User ID: ${userId}`;
-
-            if (currentUserName) {
+            if (currentUser) {
                 const firstName = currentUserName.split(' ')[0];
                 const welcomeText = `Welcome, ${firstName}`;
                 headerAuthBtn.textContent = welcomeText;
@@ -1123,9 +1295,26 @@
                 footerAuthBtn.classList.remove('bg-accent-red');
                 footerAuthBtn.classList.add('bg-white', 'text-dark-primary', 'text-base', 'px-4');
 
-                // If logged in, clicking the button should eventually lead to a profile, not the modal
+                // If logged in, clicking the button should show profile options
                 headerAuthBtn.removeEventListener('click', openAuthModal);
                 footerAuthBtn.removeEventListener('click', openAuthModal);
+                
+                headerAuthBtn.addEventListener('click', () => {
+                    // Show profile dropdown or sign out option
+                    if (confirm('Do you want to sign out?')) {
+                        signOut();
+                    }
+                });
+                
+                footerAuthBtn.addEventListener('click', () => {
+                    // Show profile dropdown or sign out option
+                    if (confirm('Do you want to sign out?')) {
+                        signOut();
+                    }
+                });
+
+                // Update user ID display
+                userIdDisplay.textContent = `Your User ID: ${currentUser.uid}`;
             } else {
                 headerAuthBtn.textContent = 'REGISTER';
                 headerAuthBtn.classList.add('bg-accent-red');
@@ -1137,9 +1326,11 @@
 
                 headerAuthBtn.addEventListener('click', openAuthModal);
                 footerAuthBtn.addEventListener('click', openAuthModal);
+
+                // Clear user ID display
+                userIdDisplay.textContent = '';
             }
         };
-
 
         // --- Auth Modal Logic ---
         const openAuthModal = () => {
@@ -1207,7 +1398,11 @@
         const showWeightSelector = (equipment) => {
             // Clear previous options
             weightOptions.innerHTML = '';
-            selectedWeight = null;
+            
+            // Only clear weight selection if switching equipment types
+            if (lastEquipmentType && lastEquipmentType !== equipment) {
+                selectedWeight = null;
+            }
             
             // Only show for dumbbell and barbell exercises
             if (equipment === 'Dumbbells' || equipment === 'Barbell') {
@@ -1225,6 +1420,12 @@
                     button.type = 'button';
                     button.className = 'weight-option';
                     button.textContent = `${weight}kg`;
+                    
+                    // Mark as selected if this weight matches the previously selected weight
+                    if (selectedWeight === weight) {
+                        button.classList.add('selected');
+                    }
+                    
                     button.addEventListener('click', () => {
                         // Remove selected class from all buttons
                         document.querySelectorAll('.weight-option').forEach(btn => {
@@ -1233,15 +1434,23 @@
                         // Add selected class to clicked button
                         button.classList.add('selected');
                         selectedWeight = weight;
+                        
+                        // Update display with workout details now that weight is selected
+                        if (currentWorkout) {
+                            detailsEl.textContent = currentWorkout.details;
+                            setMotivationQuote(currentWorkout.name, currentWorkout.details);
+                        }
                     });
                     weightOptions.appendChild(button);
                 });
                 
                 // Show the weight selector
                 weightSelector.style.display = 'block';
+                lastEquipmentType = equipment;
             } else {
                 // Hide the weight selector for other equipment
                 weightSelector.style.display = 'none';
+                lastEquipmentType = null;
             }
         }
 
@@ -1310,7 +1519,12 @@
         
         // Function to save workout history to the PUBLIC log
         const saveWorkoutToHistory = async () => {
-            const userId = currentUserName || 'Anonymous Athlete';
+            if (!currentUser) {
+                alert('Please sign in to save your workout to the public log!');
+                return;
+            }
+
+            const userId = currentUser.uid;
             const userName = currentUserName || 'Anonymous Athlete';
 
             try {
@@ -1331,8 +1545,14 @@
                 // Add weight info if available
                 const weightInfo = selectedWeight ? ` | ${selectedWeight}kg` : '';
                 
+                // Get body part and equipment from currentWorkout
+                const bodyPart = currentWorkout && currentWorkout.bodyPart ? currentWorkout.bodyPart : 'N/A';
+                const equipment = currentWorkout && currentWorkout.equipment ? currentWorkout.equipment : 'N/A';
+                
                 listItem.innerHTML = `
                     <span class="font-semibold text-accent-light break-words">${nameEl.textContent}${weightInfo}</span>
+                    <span class="text-center text-gray-300 capitalize">${bodyPart}</span>
+                    <span class="text-center text-gray-300">${equipment}</span>
                     <span class="text-center font-mono text-gray-300">${durationFormatted}</span>
                     <span class="text-center text-xs text-gray-400 font-mono break-all">${userDisplay}</span>
                     <span class="text-xs text-gray-500 text-center">${dateString}</span>
@@ -1530,23 +1750,23 @@
             // Determine if height is appropriate for age and weight
             if (gender === 'male') {
                 if (age < 25 && height < 170) {
-                    heightMessage = `According to your age (${age}) and weight (${weight}kg), your height (${height}cm) is below average. Consider exercises that can help improve posture and potentially maximize your height.`;
+                    heightMessage = `According to your weight (${weight}kg) and age (${age}), your height (${height}cm) is too low. Consider height-boosting exercises.`;
                     showHeightExercises = true;
                 } else if (age >= 25 && height < 170) {
-                    heightMessage = `Your height (${height}cm) is below average for your age (${age}). While height is largely determined by genetics, good posture can make you appear taller.`;
+                    heightMessage = `Your height (${height}cm) is below average for your weight (${weight}kg) and age (${age}). While height is largely determined by genetics, good posture can make you appear taller.`;
                     showHeightExercises = true;
                 } else {
-                    heightMessage = `Your height (${height}cm) is appropriate for your age (${age}) and weight (${weight}kg). Maintain good posture to maximize your appearance.`;
+                    heightMessage = `In your case, your height (${height}cm) is the best for your weight (${weight}kg) and age (${age}). Maintain good posture to maximize your appearance.`;
                 }
             } else { // female
                 if (age < 25 && height < 160) {
-                    heightMessage = `According to your age (${age}) and weight (${weight}kg), your height (${height}cm) is below average. Consider exercises that can help improve posture and potentially maximize your height.`;
+                    heightMessage = `According to your weight (${weight}kg) and age (${age}), your height (${height}cm) is too low. Consider height-boosting exercises.`;
                     showHeightExercises = true;
                 } else if (age >= 25 && height < 160) {
-                    heightMessage = `Your height (${height}cm) is below average for your age (${age}). While height is largely determined by genetics, good posture can make you appear taller.`;
+                    heightMessage = `Your height (${height}cm) is below average for your weight (${weight}kg) and age (${age}). While height is largely determined by genetics, good posture can make you appear taller.`;
                     showHeightExercises = true;
                 } else {
-                    heightMessage = `Your height (${height}cm) is appropriate for your age (${age}) and weight (${weight}kg). Maintain good posture to maximize your appearance.`;
+                    heightMessage = `In your case, your height (${height}cm) is the best for your weight (${weight}kg) and age (${age}). Maintain good posture to maximize your appearance.`;
                 }
             }
             
@@ -1561,23 +1781,34 @@
             
             // --- NEW: Activity Level Recommendation ---
             let activityMessage = '';
+            let activityRecommend = '';
+            
             if (age < 30) {
-                if (activityLevel < 1.55) {
-                    activityMessage = `At your age (${age}), we recommend being moderately active (exercise 3-5 days/week) for optimal health and fitness.`;
+                if (activityLevel < 1.2) {
+                    activityRecommend = 'moderately active';
+                    activityMessage = `⚠️ You need to be moderately active (moderate exercise 3-5 days/week) based on your age (${age}).`;
+                } else if (activityLevel >= 1.2 && activityLevel < 1.375) {
+                    activityRecommend = 'lightly to moderately active';
+                    activityMessage = `⚠️ You need to be lightly to moderately active based on your age (${age}).`;
+                } else if (activityLevel >= 1.375 && activityLevel < 1.55) {
+                    activityRecommend = 'moderately active';
+                    activityMessage = `⚠️ You need to be moderately active based on your age (${age}).`;
                 } else {
-                    activityMessage = `Great! Your current activity level is appropriate for your age (${age}).`;
+                    activityMessage = `✅ Great! Your activity level is appropriate for your age (${age}).`;
                 }
             } else if (age < 50) {
                 if (activityLevel < 1.375) {
-                    activityMessage = `At your age (${age}), we recommend being at least lightly active (exercise 1-3 days/week) for maintaining health and mobility.`;
+                    activityRecommend = 'lightly active';
+                    activityMessage = `⚠️ You need to be lightly active (light exercise 1-3 days/week) based on your age (${age}).`;
                 } else {
-                    activityMessage = `Great! Your current activity level is appropriate for your age (${age}).`;
+                    activityMessage = `✅ Great! Your activity level is appropriate for your age (${age}).`;
                 }
             } else {
                 if (activityLevel < 1.2) {
-                    activityMessage = `At your age (${age}), we recommend incorporating some light activity into your routine to maintain mobility and overall health.`;
+                    activityRecommend = 'somewhat active';
+                    activityMessage = `⚠️ You need to maintain some activity based on your age (${age}) for better mobility and health.`;
                 } else {
-                    activityMessage = `Great! Your current activity level is appropriate for your age (${age}).`;
+                    activityMessage = `✅ Great! Your activity level is appropriate for your age (${age}).`;
                 }
             }
             
@@ -2002,11 +2233,23 @@ NOTES:
                 const details = 'Try selecting different filters. Your current filter combination yields no quick results.';
                 detailsEl.textContent = details;
                 setMotivationQuote("Need more gear? Try the AI Trainer!", details);
+                currentWorkout = null;
                 return;
             }
 
             const randomIndex = Math.floor(Math.random() * filteredWorkouts.length);
             const workout = filteredWorkouts[randomIndex];
+            currentWorkout = workout; // Store the current workout
+            
+            // Check if weight selector should be shown and if weight is selected
+            if ((workout.equipment === 'Dumbbells' || workout.equipment === 'Barbell') && !selectedWeight) {
+                equipmentEl.textContent = `EQUIPMENT: ${workout.equipment.toUpperCase()}`;
+                nameEl.textContent = workout.name;
+                detailsEl.textContent = '⚠️ Please select a weight before starting!';
+                showWeightSelector(workout.equipment);
+                setMotivationQuote("Select your weight first!", 'Choose the appropriate weight for your exercise.');
+                return;
+            }
             
             updateWODDisplay(workout.name, workout.equipment, workout.details);
         };
@@ -2078,6 +2321,14 @@ NOTES:
         // --- Main Initialization ---
         document.addEventListener('DOMContentLoaded', () => {
             
+            // Initialize Firebase Authentication
+            initAuth();
+            
+            // --- Social Login Event Listeners ---
+            googleLoginBtn.addEventListener('click', signInWithGoogle);
+            facebookLoginBtn.addEventListener('click', signInWithFacebook);
+            githubLoginBtn.addEventListener('click', signInWithGitHub);
+
             // --- Modal Event Listeners ---
             headerAuthBtn.addEventListener('click', openAuthModal);
             footerAuthBtn.addEventListener('click', openAuthModal);
@@ -2104,18 +2355,29 @@ NOTES:
             calculateCaloriesBtn.addEventListener('click', calculateCalories);
             generateDietBtn.addEventListener('click', generateDietPlan);
 
-            // Stop form submission (since we don't have a backend)
+            // Email/Password form submission
             const loginForm = document.getElementById('login-form');
             loginForm.addEventListener('submit', (e) => {
                 e.preventDefault();
-                console.log('Registration attempt initiated! (Placeholder action)');
-                // Simulate login with full name
-                const fullNameInput = document.getElementById('full-name');
-                currentUserName = fullNameInput.value.trim() || 'Anonymous Athlete'; // Use the full name
                 
-                updateUserUI();
-                setMotivationQuote(nameEl.textContent, currentWorkoutDetails);
-                closeAuthModal();
+                const email = document.getElementById('email').value;
+                const password = document.getElementById('password').value;
+                
+                if (!email || !password) {
+                    alert('Please enter both email and password');
+                    return;
+                }
+                
+                // Try to sign in first, if fails then create account
+                signInWithEmail(email, password)
+                    .catch((error) => {
+                        // If sign in fails, try to create account
+                        if (error.code === 'auth/user-not-found') {
+                            signUpWithEmail(email, password);
+                        } else {
+                            alert('Authentication error: ' + error.message);
+                        }
+                    });
             });
 
             // Initialize Competition Countdown Timer
@@ -2128,6 +2390,12 @@ NOTES:
             // Event Listeners for WOD and Timer Controls
             quickBtn.addEventListener('click', filterAndGenerateQuickWorkout);
             aiBtn.addEventListener('click', generateAITrainerPlan);
+            
+            // Clear weight selection when equipment filter changes
+            const equipmentFilter = document.getElementById('equipment-filter');
+            equipmentFilter.addEventListener('change', () => {
+                selectedWeight = null;
+            });
 
             // TIMER LISTENERS
             durationSelectEl.addEventListener('change', updateSetDuration);
